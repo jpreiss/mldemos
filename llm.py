@@ -92,24 +92,26 @@ def main():
             data_str.append(toks)
     data_int = [np.array([TOKIND[t] for t in toks]) for toks in data_str]
     X_int = torch.LongTensor(np.stack(data_int))
+    assert torch.all(X_int[:, 3] == NTOK - 1)
     trans = Transformer(layers=1)
 
     epochs = 1000
-    opt = torch.optim.Adam(trans.parameters(), lr=1e-4)
+    opt = torch.optim.Adam(trans.parameters(), lr=1e-3)
     for epoch in range(epochs):
         shuf = np.random.permutation(len(X_int))
-        X_int = X_int[shuf]
+        X_int = X_int[shuf, :]
+        assert torch.all(X_int[:, 3] == NTOK - 1)
         if epoch % 10 == 0:
             print(f"After epoch {epoch}, I think...")
             with torch.no_grad():
                 for _ in range(10):
                     idx = np.random.choice(len(data_int))
-                    x = X_int[idx]
+                    x = X_int[idx] + 0
                     y_toks = generate(trans, x[:3], n=2)
                     x[3:] = torch.tensor(y_toks)
                     print("".join(TOKENS[t] for t in x))
         for i in range(len(X_int)):
-            d = X_int[i]
+            d = X_int[i, :]
             #print("".join(data_str[i]))
             opt.zero_grad()
             logits = trans.forward(d)
@@ -117,9 +119,11 @@ def main():
             onehots = F.one_hot(d[1:], NTOK)
             #print(f"{dists = }\n{onehots = }")
             logits = trans.forward(d)[:-1, :] # can't predict after end
-            #target = d[1:]
-            target = torch.LongTensor(np.repeat(NTOK - 1, CONTEXT - 1))
-            loss = F.cross_entropy(logits, target)
+            target = d[1:]
+            assert d[3] == NTOK - 1
+            #target = torch.LongTensor(np.repeat(NTOK - 1, CONTEXT - 1))
+            #loss = F.cross_entropy(logits, target)
+            loss = F.cross_entropy(logits[2], target[2])
             loss.backward()
             opt.step()
 
