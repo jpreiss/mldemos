@@ -40,9 +40,10 @@ class Transformer(nn.Module):
         # less code than fourier, lol
         self.pos_embed = torch.normal(
             torch.zeros(CONTEXT, DIM),
-            1 / np.sqrt(DIM),
+            1,
         )
-        # self.pos_embed = torch.Parameter(self.pos_embed)
+        #self.pos_embed = nn.Parameter(self.pos_embed)
+        #print(self.pos_embed)
         assert self.pos_embed.shape == (CONTEXT, DIM)
         self.tok_embed = nn.Embedding(NTOK, DIM)
         self.layers = [Attention() for _ in range(layers)]
@@ -91,12 +92,14 @@ def main():
             data_str.append(toks)
     data_int = [np.array([TOKIND[t] for t in toks]) for toks in data_str]
     X_int = torch.LongTensor(np.stack(data_int))
-    trans = Transformer(layers=3)
+    trans = Transformer(layers=1)
 
     epochs = 1000
-    opt = torch.optim.Adam(trans.parameters())
+    opt = torch.optim.Adam(trans.parameters(), lr=1e-4)
     for epoch in range(epochs):
-        if True:
+        shuf = np.random.permutation(len(X_int))
+        X_int = X_int[shuf]
+        if epoch % 10 == 0:
             print(f"After epoch {epoch}, I think...")
             with torch.no_grad():
                 for _ in range(10):
@@ -114,7 +117,9 @@ def main():
             onehots = F.one_hot(d[1:], NTOK)
             #print(f"{dists = }\n{onehots = }")
             logits = trans.forward(d)[:-1, :] # can't predict after end
-            loss = F.cross_entropy(logits, d[1:])
+            #target = d[1:]
+            target = torch.LongTensor(np.repeat(NTOK - 1, CONTEXT - 1))
+            loss = F.cross_entropy(logits, target)
             loss.backward()
             opt.step()
 
