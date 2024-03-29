@@ -40,7 +40,7 @@ class Transformer(nn.Module):
         # less code than fourier, lol
         self.pos_embed = torch.normal(
             torch.zeros(CONTEXT, DIM),
-            1,
+            1 / np.sqrt(DIM),
         )
         #self.pos_embed = nn.Parameter(self.pos_embed)
         #print(self.pos_embed)
@@ -121,9 +121,9 @@ def main():
             logits = trans.forward(d)[:-1, :] # can't predict after end
             target = d[1:]
             assert d[3] == NTOK - 1
-            #target = torch.LongTensor(np.repeat(NTOK - 1, CONTEXT - 1))
-            #loss = F.cross_entropy(logits, target)
-            loss = F.cross_entropy(logits[2], target[2])
+            # DEBUG target = torch.LongTensor(np.repeat(NTOK - 1, CONTEXT - 1))
+            loss = F.cross_entropy(logits, target)
+            # DEBUG loss = F.cross_entropy(logits[2], target[2])
             loss.backward()
             opt.step()
 
