@@ -36,7 +36,7 @@ class MultiAttention(nn.Module):
             Q = Qh[:, :, j0:j1]
             K = Kh[:, :, j0:j1]
             V = Vh[:, :, j0:j1]
-            # all are CONTEXT x DIM
+            # all are batch * CONTEXT x head_dim
             A = Q @ K.transpose(-1, -2) / np.sqrt(head_dim) # attention
             assert A.shape == (batch, CONTEXT, CONTEXT)
             # rows of A correspond to Q's "soft lookup"
