@@ -6,7 +6,7 @@ from torch.nn import functional as F
 TOKENS = ["END"] + [str(i) for i in range(10)] + ["+", "*", "="]
 TOKIND = {t: i for i, t in enumerate(TOKENS)}
 NTOK = len(TOKENS)
-DIM = 16
+DIM = 32
 CONTEXT = 5
 
 
@@ -109,7 +109,7 @@ def main():
     X_train = data_int[:, :-1]
     Y_train = data_int[:, 1:]
 
-    trans = Transformer(heads=2, head_dim=DIM//2, layers=1)
+    trans = Transformer(heads=4, head_dim=8, layers=1)
 
     epochs = 5000
     opt = torch.optim.AdamW(trans.parameters(), lr=1e-2)
