@@ -3,7 +3,7 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
-TOKENS = ["END"] + [str(i) for i in range(10)] + ["+", "="]
+TOKENS = ["END"] + [str(i) for i in range(10)] + ["+", "*", "="]
 TOKIND = {t: i for i, t in enumerate(TOKENS)}
 NTOK = len(TOKENS)
 DIM = 16
@@ -99,9 +99,9 @@ def main():
     data_str = []
     for a in range(10):
         for b in range(10):
-            c = a + b
-            toks = [str(a), "+", str(b), "=", str(c // 10), str(c % 10)]
-            data_str.append(toks)
+            for c, op in zip([a + b, a * b], ["+", "*"]):
+                toks = [str(a), op, str(b), "=", str(c // 10), str(c % 10)]
+                data_str.append(toks)
     data_int = [np.array([TOKIND[t] for t in toks]) for toks in data_str]
     data_int = torch.LongTensor(np.stack(data_int))
     assert torch.all(data_int[:, 3] == NTOK - 1)
