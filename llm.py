@@ -48,26 +48,9 @@ class MultiAttention(nn.Module):
         return Y
 
 
-def pos_encoding(context, dim):
-    t = (2 * np.pi / context) * np.tile(np.arange(context), (context, 1)).squeeze()
-    assert t.shape == (context, context)
-    omegas = np.arange(context)
-    fourier = np.cos(t * omegas[:, None])
-    assert fourier.shape == (context, context)
-    #plt.imshow(fourier)
-    #plt.show()
-    subsample = np.linspace(0, context - 1, dim).astype(int)
-    enc = fourier[:, subsample].astype(np.float32)
-    enc /= np.sqrt(dim)
-    #plt.imshow(enc)
-    #plt.show()
-    return enc
-
-
 class Transformer(nn.Module):
     def __init__(self, heads, layers):
         super().__init__()
-        #self.pos_embed = torch.tensor(pos_encoding(CONTEXT, DIM))
         pos_init = torch.normal(mean=0, std=1, size=(CONTEXT, DIM))
         self.pos_embed = nn.Parameter(pos_init)
         self.tok_embed = nn.Embedding(NTOK, DIM)
