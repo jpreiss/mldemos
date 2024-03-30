@@ -54,7 +54,7 @@ class Transformer(nn.Module):
         pos_init = torch.normal(mean=0, std=1/np.sqrt(DIM), size=(CONTEXT, DIM))
         self.pos_embed = nn.Parameter(pos_init)
         self.tok_embed = nn.Embedding(NTOK, DIM)
-        self.tok_unembed = nn.Linear(DIM, NTOK)
+        self.tok_unembed = nn.Linear(DIM, NTOK, bias=False)
         self.layers = [MultiAttention(heads) for _ in range(layers)]
 
     def forward(self, toks):
