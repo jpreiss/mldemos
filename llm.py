@@ -86,7 +86,7 @@ class Transformer(nn.Module):
         assert X0.shape == (batch, CONTEXT, DIM)
         X = X0 + self.pos_embed
         for layer in self.layers:
-            X = layer(X) + X
+            X = layer(X)
         # now is context x dim
         logits = self.tok_unembed(X)
         # now is context x NTOK, aka logits for dists over tokens
