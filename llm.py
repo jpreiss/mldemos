@@ -115,10 +115,6 @@ def main():
     opt = torch.optim.AdamW(trans.parameters(), lr=1e-2)
     for epoch in range(epochs):
         opt.zero_grad()
-        #logits = trans(d)
-        #dists = F.softmax(logits, dim=1)[:-1]
-        #onehots = F.one_hot(d[1:], NTOK)
-        #print(f"{dists = }\n{onehots = }")
         logits = trans(X_train)
         if False:
             # DEBUG
