@@ -20,9 +20,9 @@ class Attention(nn.Module):
         self.mask = torch.triu(torch.zeros((CONTEXT, CONTEXT)) - np.inf, 1)
 
     def forward(self, X):
-        Q = self.Q.forward(X)
-        K = self.K.forward(X)
-        V = self.V.forward(X)
+        Q = self.Q(X)
+        K = self.K(X)
+        V = self.V(X)
         # all are CONTEXT x DIM
         A = Q @ K.T / np.sqrt(DIM) # attention
         # rows of A correspond to Q's "soft lookup"
@@ -59,13 +59,13 @@ class Transformer(nn.Module):
 
     def forward(self, toks):
         assert toks.shape == (CONTEXT,)
-        X0 = self.tok_embed.forward(toks)
+        X0 = self.tok_embed(toks)
         assert X0.shape == (CONTEXT, DIM)
         X = X0 + self.pos_embed
         for layer in self.layers:
-            X = layer.forward(X) + X
+            X = layer(X) + X
         # now is context x dim
-        logits = self.tok_unembed.forward(X)
+        logits = self.tok_unembed(X)
         # now is context x NTOK, aka logits for dists over tokens
         return logits
 
@@ -79,7 +79,7 @@ def generate(trans, toks, n):
     out = []
     with torch.no_grad():
         for i in range(n):
-            logits = trans.forward(x)[j]
+            logits = trans(x)[j]
             assert logits.shape == (NTOK,)
             assert not any(torch.isnan(logits))
             dist = F.softmax(logits).detach().numpy()
@@ -122,11 +122,11 @@ def main():
             d = X_int[i, :]
             #print("".join(data_str[i]))
             opt.zero_grad()
-            logits = trans.forward(d)
+            logits = trans(d)
             dists = F.softmax(logits, dim=1)[:-1]
             onehots = F.one_hot(d[1:], NTOK)
             #print(f"{dists = }\n{onehots = }")
-            logits = trans.forward(d)[:-1, :] # can't predict after end
+            logits = trans(d)[:-1, :] # can't predict after end
             target = d[1:]
             assert d[3] == NTOK - 1  # equals sign
             # DEBUG target = torch.LongTensor(np.repeat(NTOK - 1, CONTEXT - 1))
