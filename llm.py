@@ -7,7 +7,7 @@ TOKENS = ["END"] + [str(i) for i in range(10)] + ["+", "="]
 TOKIND = {t: i for i, t in enumerate(TOKENS)}
 NTOK = len(TOKENS)
 DIM = 32
-CONTEXT = 5
+CONTEXT = 4
 
 
 class MultiAttention(nn.Module):
@@ -73,13 +73,13 @@ class Transformer(nn.Module):
 
 def generate(trans, toks, n):
     batch, j = toks.shape
-    assert j + n <= CONTEXT
+    assert j + n <= CONTEXT + 1
     # zero is END
     x = torch.zeros(batch, CONTEXT, dtype=torch.long)
-    x[:, :j] = toks
     out = []
     with torch.no_grad():
         for i in range(n):
+            x[:, :j] = toks
             logits = trans(x)[:, j - 1]
             assert logits.shape == (batch, NTOK)
             assert not any(torch.isnan(logits.flatten()))
@@ -87,8 +87,10 @@ def generate(trans, toks, n):
             sample = torch.multinomial(dist, num_samples=1).squeeze()
             assert sample.shape == (batch,)
             out.append(sample)
-            x[:, j] = sample
-            j += 1
+            toks = torch.cat([toks, sample[:, None]], axis=-1)
+            if i != n - 1:
+                x[:, j] = sample
+                j += 1
     return torch.stack(out).T
 
 
@@ -104,8 +106,7 @@ def main():
     data_int = torch.LongTensor(np.stack(data_int))
     assert torch.all(data_int[:, 3] == NTOK - 1)
 
-    # TODO: remove final elt
-    X_train = data_int
+    X_train = data_int[:, :-1]
     Y_train = data_int[:, 1:]
 
     trans = Transformer(heads=1, head_dim=DIM, layers=1)
@@ -118,7 +119,7 @@ def main():
         #dists = F.softmax(logits, dim=1)[:-1]
         #onehots = F.one_hot(d[1:], NTOK)
         #print(f"{dists = }\n{onehots = }")
-        logits = trans(X_train)[:, :-1]
+        logits = trans(X_train)
         if False:
             # DEBUG
             idx = 2
@@ -135,7 +136,7 @@ def main():
                 Y = generate(trans, X, n=2)
                 assert Y.shape[-1] == 2
                 XY = torch.cat([X, Y], dim=1)
-                errors = torch.sum((XY != X_train).flatten())
+                errors = torch.sum((XY != data_int).flatten())
                 N = X_train.shape[0]
                 print(f"errors = {errors}/{N}")
                 samples = 10
