@@ -1,3 +1,4 @@
+import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from torch import nn
@@ -32,19 +33,26 @@ class Attention(nn.Module):
         return Y
 
 
+def pos_encoding(context, dim):
+    t = (2 * np.pi / context) * np.tile(np.arange(context), (context, 1)).squeeze()
+    assert t.shape == (context, context)
+    omegas = np.arange(context)
+    fourier = np.cos(t * omegas[:, None])
+    assert fourier.shape == (context, context)
+    #plt.imshow(fourier)
+    #plt.show()
+    subsample = np.linspace(0, context - 1, dim).astype(int)
+    enc = fourier[:, subsample].astype(np.float32)
+    #plt.imshow(enc)
+    #plt.show()
+    return enc
+
 
 class Transformer(nn.Module):
     def __init__(self, layers):
         super().__init__()
         # TODO: multi-head
-        # less code than fourier, lol
-        self.pos_embed = torch.normal(
-            torch.zeros(CONTEXT, DIM),
-            1 / np.sqrt(DIM),
-        )
-        #self.pos_embed = nn.Parameter(self.pos_embed)
-        #print(self.pos_embed)
-        assert self.pos_embed.shape == (CONTEXT, DIM)
+        self.pos_embed = torch.tensor(pos_encoding(CONTEXT, DIM))
         self.tok_embed = nn.Embedding(NTOK, DIM)
         self.layers = [Attention() for _ in range(layers)]
         self.tok_unembed = nn.Linear(DIM, NTOK)
