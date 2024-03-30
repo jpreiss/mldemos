@@ -132,7 +132,7 @@ def main():
                 Y = generate(trans, X, n=3)
                 assert Y.shape[-1] == 3
                 XY = torch.cat([X, Y], dim=1)
-                errors = torch.sum((XY != data_int).flatten())
+                errors = torch.sum(torch.any(XY != data_int, dim=-1))
                 N = X_train.shape[0]
                 print(f"errors = {errors}/{N}")
                 samples = 10
