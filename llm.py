@@ -51,7 +51,7 @@ class MultiAttention(nn.Module):
 class Transformer(nn.Module):
     def __init__(self, heads, layers):
         super().__init__()
-        pos_init = torch.normal(mean=0, std=1, size=(CONTEXT, DIM))
+        pos_init = torch.normal(mean=0, std=1/np.sqrt(DIM), size=(CONTEXT, DIM))
         self.pos_embed = nn.Parameter(pos_init)
         self.tok_embed = nn.Embedding(NTOK, DIM)
         self.tok_unembed = nn.Linear(DIM, NTOK)
