@@ -6,8 +6,8 @@ from torch.nn import functional as F
 TOKENS = ["END"] + [str(i) for i in range(10)] + ["+", "="]
 TOKIND = {t: i for i, t in enumerate(TOKENS)}
 NTOK = len(TOKENS)
-DIM = 32
-CONTEXT = 4
+DIM = 16
+CONTEXT = 5
 
 
 class MultiAttention(nn.Module):
@@ -97,10 +97,10 @@ def generate(trans, toks, n):
 def main():
     # generate some training data
     data_str = []
-    for a in range(5):
-        for b in range(5):
+    for a in range(10):
+        for b in range(10):
             c = a + b
-            toks = [str(a), "+", str(b), "=", str(c)]
+            toks = [str(a), "+", str(b), "=", str(c // 10), str(c % 10)]
             data_str.append(toks)
     data_int = [np.array([TOKIND[t] for t in toks]) for toks in data_str]
     data_int = torch.LongTensor(np.stack(data_int))
@@ -109,7 +109,7 @@ def main():
     X_train = data_int[:, :-1]
     Y_train = data_int[:, 1:]
 
-    trans = Transformer(heads=1, head_dim=DIM, layers=1)
+    trans = Transformer(heads=2, head_dim=DIM//2, layers=1)
 
     epochs = 5000
     opt = torch.optim.AdamW(trans.parameters(), lr=1e-2)
@@ -129,8 +129,8 @@ def main():
             print(f"loss = {loss.item()}")
             with torch.no_grad():
                 X = X_train[:, :3]
-                Y = generate(trans, X, n=2)
-                assert Y.shape[-1] == 2
+                Y = generate(trans, X, n=3)
+                assert Y.shape[-1] == 3
                 XY = torch.cat([X, Y], dim=1)
                 errors = torch.sum((XY != data_int).flatten())
                 N = X_train.shape[0]
