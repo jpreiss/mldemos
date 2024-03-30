@@ -114,7 +114,7 @@ def main():
             with torch.no_grad():
                 for _ in range(10):
                     idx = np.random.choice(len(data_int))
-                    x = X_int[idx] + 0
+                    x = X_int[idx] + 0  # copy for inplace edit later
                     y_toks = generate(trans, x[:3], n=2)
                     x[3:] = torch.tensor(y_toks)
                     print("".join(TOKENS[t] for t in x))
@@ -128,10 +128,12 @@ def main():
             #print(f"{dists = }\n{onehots = }")
             logits = trans.forward(d)[:-1, :] # can't predict after end
             target = d[1:]
-            assert d[3] == NTOK - 1
+            assert d[3] == NTOK - 1  # equals sign
             # DEBUG target = torch.LongTensor(np.repeat(NTOK - 1, CONTEXT - 1))
             loss = F.cross_entropy(logits, target)
-            # DEBUG loss = F.cross_entropy(logits[2], target[2])
+            if False:
+                # DEBUG
+                loss = F.cross_entropy(logits[2], target[2])
             loss.backward()
             opt.step()
 
