@@ -20,9 +20,7 @@ class MultiAttention(nn.Module):
         self.K = nn.Linear(DIM, DIM, bias=False)
         self.V = nn.Linear(DIM, DIM, bias=False)
         self.mask = torch.triu(torch.zeros((CONTEXT, CONTEXT)) - np.inf, 1)
-        self.proj = nn.Linear(DIM, DIM)
-        self.lin1 = nn.Linear(DIM, DIM)
-        self.lin2 = nn.Linear(DIM, DIM)
+        self.proj = nn.Linear(DIM, DIM, bias=False)
 
     def forward(self, X):
         batch, c, d = X.shape
@@ -46,11 +44,8 @@ class MultiAttention(nn.Module):
             S = torch.softmax(A, dim=-1)
             assert S.shape == A.shape
             Ycat[:, :, j0:j1] = S @ V
-        Yproj = self.proj(Ycat)
-        Y = self.lin1(Yproj)
-        Y = F.relu(Y)
-        Y = self.lin2(Y)
-        return Y + Yproj
+        Y = self.proj(Ycat) + X
+        return Y
 
 
 def pos_encoding(context, dim):
