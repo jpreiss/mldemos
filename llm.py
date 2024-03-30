@@ -63,7 +63,7 @@ class Transformer(nn.Module):
         assert X0.shape == (CONTEXT, DIM)
         X = X0 + self.pos_embed
         for layer in self.layers:
-            X = layer.forward(X)
+            X = layer.forward(X) + X
         # now is context x dim
         logits = self.tok_unembed.forward(X)
         # now is context x NTOK, aka logits for dists over tokens
