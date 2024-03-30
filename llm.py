@@ -94,6 +94,44 @@ def generate(trans, toks, n):
     return torch.stack(out).T
 
 
+def check_completion(data_int, trans):
+    N = data_int.shape[0]
+    samples = 10
+    X = data_int[:, :3]
+    Y = generate(trans, X, n=3)
+    assert Y.shape[-1] == 3
+    XY = torch.cat([X, Y], dim=1)
+    errors = torch.sum(torch.any(XY != data_int, dim=-1))
+    print(f"errors = {errors}/{N}")
+    idx = np.random.choice(N, size=samples)
+    for xy in XY[idx]:
+        print("".join(TOKENS[t] for t in xy))
+
+
+def check_coverage(data_int, trans):
+    X = data_int[:, :1]
+    X = torch.cat([X] * 10, dim=0)  # gotta expect some duplicates
+    Y = generate(trans, X, n=5)
+    assert Y.shape[-1] == 5
+    XY = torch.cat([X, Y], dim=1)
+    sD = set(tuple(d.numpy()) for d in data_int)
+    sXY = set(tuple(xy.numpy()) for xy in XY)
+    n_true = len(sD & sXY)
+    false_eqns = sXY - sD
+    n_false = len(false_eqns)
+    print(f"generated {n_true}/{len(sD)} true equations")
+    print(f"generated {n_false} false equations")
+    if len(false_eqns) < 10:
+        print("false equations:")
+        for f in false_eqns:
+            print("".join(TOKENS[t] for t in f))
+    print("samples:")
+    samples = 10
+    idx = np.random.choice(data_int.shape[0], size=samples)
+    for xy in XY[idx]:
+        print("".join(TOKENS[t] for t in xy))
+
+
 def main():
     # generate some training data
     data_str = []
@@ -111,7 +149,7 @@ def main():
 
     trans = Transformer(heads=4, head_dim=8, layers=1)
 
-    epochs = 5000
+    epochs = 5001
     opt = torch.optim.AdamW(trans.parameters(), lr=1e-2)
     for epoch in range(epochs):
         opt.zero_grad()
@@ -128,17 +166,11 @@ def main():
             print(f"After epoch {epoch}, I think...")
             print(f"loss = {loss.item()}")
             with torch.no_grad():
-                X = X_train[:, :3]
-                Y = generate(trans, X, n=3)
-                assert Y.shape[-1] == 3
-                XY = torch.cat([X, Y], dim=1)
-                errors = torch.sum(torch.any(XY != data_int, dim=-1))
-                N = X_train.shape[0]
-                print(f"errors = {errors}/{N}")
-                samples = 10
-                idx = np.random.choice(N, size=samples)
-                for xy in XY[idx]:
-                    print("".join(TOKENS[t] for t in xy))
+                check_completion(data_int, trans)
+        if epoch % 1000 == 0:
+            print(f"Coverage test for epoch {epoch}:")
+            with torch.no_grad():
+                check_coverage(data_int, trans)
 
 
 if __name__ == "__main__":
