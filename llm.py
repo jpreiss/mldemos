@@ -72,7 +72,9 @@ def pos_encoding(context, dim):
 class Transformer(nn.Module):
     def __init__(self, heads, layers):
         super().__init__()
-        self.pos_embed = torch.tensor(pos_encoding(CONTEXT, DIM))
+        #self.pos_embed = torch.tensor(pos_encoding(CONTEXT, DIM))
+        pos_init = torch.normal(mean=0, std=1, size=(CONTEXT, DIM))
+        self.pos_embed = nn.Parameter(pos_init)
         self.tok_embed = nn.Embedding(NTOK, DIM)
         self.tok_unembed = nn.Linear(DIM, NTOK)
         self.layers = [MultiAttention(heads) for _ in range(layers)]
@@ -130,36 +132,38 @@ def main():
 
     trans = Transformer(heads=1, layers=1)
 
-    epochs = 1000
+    epochs = 5000
     opt = torch.optim.AdamW(trans.parameters(), lr=1e-2)
     for epoch in range(epochs):
-        if epoch % 10 == 0:
-            print(f"After epoch {epoch}, I think...")
-            with torch.no_grad():
-                samples = 10
-                idx = np.random.choice(len(data_int), size=samples)
-                X = X_train[idx, :3]
-                Y = generate(trans, X, n=2)
-                print(Y.shape)
-                assert Y.shape == (samples, 2)
-                XY = torch.cat([X, Y], dim=1)
-                for xy in XY:
-                    print("".join(TOKENS[t] for t in xy))
         opt.zero_grad()
         #logits = trans(d)
         #dists = F.softmax(logits, dim=1)[:-1]
         #onehots = F.one_hot(d[1:], NTOK)
         #print(f"{dists = }\n{onehots = }")
         logits = trans(X_train)[:, :-1]
-        target = Y_train.flatten()
-        # DEBUG target = torch.LongTensor(np.repeat(NTOK - 1, CONTEXT - 1))
-        loss = F.cross_entropy(logits.reshape(-1, NTOK), target)
-        if True:
+        if False:
             # DEBUG
             idx = 2
             loss = F.cross_entropy(logits[:, idx], Y_train[:, idx])
+        else:
+            loss = F.cross_entropy(logits.reshape(-1, NTOK), Y_train.flatten())
         loss.backward()
         opt.step()
+        if epoch % 100 == 0:
+            print(f"After epoch {epoch}, I think...")
+            print(f"loss = {loss.item()}")
+            with torch.no_grad():
+                X = X_train[:, :3]
+                Y = generate(trans, X, n=2)
+                assert Y.shape[-1] == 2
+                XY = torch.cat([X, Y], dim=1)
+                errors = torch.sum((XY != X_train).flatten())
+                N = X_train.shape[0]
+                print(f"errors = {errors}/{N}")
+                samples = 10
+                idx = np.random.choice(N, size=samples)
+                for xy in XY[idx]:
+                    print("".join(TOKENS[t] for t in xy))
 
 
 if __name__ == "__main__":
