@@ -11,38 +11,35 @@ DIM = 32
 CONTEXT = 5
 
 
-class Attention(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.Q = nn.Linear(DIM, DIM, bias=False)
-        self.K = nn.Linear(DIM, DIM, bias=False)
-        self.V = nn.Linear(DIM, DIM, bias=False)
-        self.mask = torch.triu(torch.zeros((CONTEXT, CONTEXT)) - np.inf, 1)
-
-    def forward(self, X):
-        Q = self.Q(X)
-        K = self.K(X)
-        V = self.V(X)
-        # all are CONTEXT x DIM
-        A = Q @ K.T / np.sqrt(DIM) # attention
-        # rows of A correspond to Q's "soft lookup"
-        A += self.mask
-        S = torch.softmax(A, dim=1)
-        assert S.shape == A.shape
-        Y = S @ V
-        return Y
-
-
 class MultiAttention(nn.Module):
     def __init__(self, heads):
         super().__init__()
-        self.heads = [Attention() for _ in range(heads)]
+        self.Q = nn.Linear(DIM, heads * DIM, bias=False)
+        self.K = nn.Linear(DIM, heads * DIM, bias=False)
+        self.V = nn.Linear(DIM, heads * DIM, bias=False)
+        self.mask = torch.triu(torch.zeros((CONTEXT, CONTEXT)) - np.inf, 1)
         self.projector = nn.Linear(heads * DIM, DIM)
         self.lin = nn.Linear(DIM, DIM)
 
     def forward(self, X):
-        Ys = [h(X) for h in self.heads]
-        Ycat = torch.cat(Ys, axis=-1)
+        Qh = self.Q(X)
+        Kh = self.K(X)
+        Vh = self.V(X)
+        heads = Qh.shape[1] // DIM
+        Ycat = torch.zeros(CONTEXT, heads * DIM)
+        for i in range(heads):
+            j0 = DIM * i
+            j1 = DIM * (i + 1)
+            Q = Qh[:, j0:j1]
+            K = Kh[:, j0:j1]
+            V = Vh[:, j0:j1]
+            # all are CONTEXT x DIM
+            A = Q @ K.T / np.sqrt(DIM) # attention
+            # rows of A correspond to Q's "soft lookup"
+            A += self.mask
+            S = torch.softmax(A, dim=1)
+            assert S.shape == A.shape
+            Ycat[:, j0:j1] = S @ V
         Y = self.projector(Ycat)
         Y = F.relu(Y)
         Y = self.lin(Y)
