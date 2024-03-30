@@ -14,22 +14,24 @@ CONTEXT = 5
 class MultiAttention(nn.Module):
     def __init__(self, heads):
         super().__init__()
-        self.Q = nn.Linear(DIM, heads * DIM, bias=False)
-        self.K = nn.Linear(DIM, heads * DIM, bias=False)
-        self.V = nn.Linear(DIM, heads * DIM, bias=False)
+        assert (DIM // heads) * heads == DIM
+        self.heads = heads
+        self.Q = nn.Linear(DIM, DIM, bias=False)
+        self.K = nn.Linear(DIM, DIM, bias=False)
+        self.V = nn.Linear(DIM, DIM, bias=False)
         self.mask = torch.triu(torch.zeros((CONTEXT, CONTEXT)) - np.inf, 1)
-        self.projector = nn.Linear(heads * DIM, DIM)
-        self.lin = nn.Linear(DIM, DIM)
+        self.proj = nn.Linear(DIM, DIM)
+        self.lin1 = nn.Linear(DIM, DIM)
+        self.lin2 = nn.Linear(DIM, DIM)
 
     def forward(self, X):
         Qh = self.Q(X)
         Kh = self.K(X)
         Vh = self.V(X)
-        heads = Qh.shape[1] // DIM
-        Ycat = torch.zeros(CONTEXT, heads * DIM)
-        for i in range(heads):
-            j0 = DIM * i
-            j1 = DIM * (i + 1)
+        Ycat = torch.zeros(CONTEXT, DIM)
+        for i in range(self.heads):
+            j0 = (DIM // self.heads) * i
+            j1 = (DIM // self.heads) * (i + 1)
             Q = Qh[:, j0:j1]
             K = Kh[:, j0:j1]
             V = Vh[:, j0:j1]
@@ -40,10 +42,11 @@ class MultiAttention(nn.Module):
             S = torch.softmax(A, dim=1)
             assert S.shape == A.shape
             Ycat[:, j0:j1] = S @ V
-        Y = self.projector(Ycat)
+        Yproj = self.proj(Ycat)
+        Y = self.lin1(Yproj)
         Y = F.relu(Y)
-        Y = self.lin(Y)
-        return Y
+        Y = self.lin2(Y)
+        return Y + Yproj
 
 
 def pos_encoding(context, dim):
@@ -56,6 +59,7 @@ def pos_encoding(context, dim):
     #plt.show()
     subsample = np.linspace(0, context - 1, dim).astype(int)
     enc = fourier[:, subsample].astype(np.float32)
+    enc /= np.sqrt(dim)
     #plt.imshow(enc)
     #plt.show()
     return enc
@@ -113,10 +117,10 @@ def main():
     data_int = [np.array([TOKIND[t] for t in toks]) for toks in data_str]
     X_int = torch.LongTensor(np.stack(data_int))
     assert torch.all(X_int[:, 3] == NTOK - 1)
-    trans = Transformer(heads=3, layers=2)
+    trans = Transformer(heads=4, layers=2)
 
     epochs = 1000
-    opt = torch.optim.Adam(trans.parameters(), lr=1e-3)
+    opt = torch.optim.AdamW(trans.parameters(), lr=1e-3)
     for epoch in range(epochs):
         shuf = np.random.permutation(len(X_int))
         X_int = X_int[shuf, :]
@@ -134,9 +138,9 @@ def main():
             d = X_int[i, :]
             #print("".join(data_str[i]))
             opt.zero_grad()
-            logits = trans(d)
-            dists = F.softmax(logits, dim=1)[:-1]
-            onehots = F.one_hot(d[1:], NTOK)
+            #logits = trans(d)
+            #dists = F.softmax(logits, dim=1)[:-1]
+            #onehots = F.one_hot(d[1:], NTOK)
             #print(f"{dists = }\n{onehots = }")
             logits = trans(d)[:-1, :] # can't predict after end
             target = d[1:]
@@ -145,7 +149,8 @@ def main():
             loss = F.cross_entropy(logits, target)
             if False:
                 # DEBUG
-                loss = F.cross_entropy(logits[2], target[2])
+                idx = 2
+                loss = F.cross_entropy(logits[idx], target[idx])
             loss.backward()
             opt.step()
 
