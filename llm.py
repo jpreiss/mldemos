@@ -11,15 +11,15 @@ CONTEXT = 5
 
 
 class MultiAttention(nn.Module):
-    def __init__(self, heads):
+    def __init__(self, heads, head_dim):
         super().__init__()
-        assert (DIM // heads) * heads == DIM
         self.heads = heads
-        self.Q = nn.Linear(DIM, DIM, bias=False)
-        self.K = nn.Linear(DIM, DIM, bias=False)
-        self.V = nn.Linear(DIM, DIM, bias=False)
+        rows = heads * head_dim
+        self.Q = nn.Linear(DIM, rows, bias=False)
+        self.K = nn.Linear(DIM, rows, bias=False)
+        self.V = nn.Linear(DIM, rows, bias=False)
         self.mask = torch.triu(torch.zeros((CONTEXT, CONTEXT)) - np.inf, 1)
-        self.proj = nn.Linear(DIM, DIM, bias=False)
+        self.proj = nn.Linear(rows, DIM, bias=False)
 
     def forward(self, X):
         batch, c, d = X.shape
@@ -28,15 +28,16 @@ class MultiAttention(nn.Module):
         Qh = self.Q(X)
         Kh = self.K(X)
         Vh = self.V(X)
-        Ycat = torch.zeros(batch, CONTEXT, DIM)
+        Ycat = torch.zeros_like(Vh)
+        head_dim = Ycat.shape[-1] // self.heads
         for i in range(self.heads):
-            j0 = (DIM // self.heads) * i
-            j1 = (DIM // self.heads) * (i + 1)
+            j0 = head_dim * i
+            j1 = head_dim * (i + 1)
             Q = Qh[:, :, j0:j1]
             K = Kh[:, :, j0:j1]
             V = Vh[:, :, j0:j1]
             # all are CONTEXT x DIM
-            A = Q @ K.transpose(-1, -2) / np.sqrt(DIM) # attention
+            A = Q @ K.transpose(-1, -2) / np.sqrt(head_dim) # attention
             assert A.shape == (batch, CONTEXT, CONTEXT)
             # rows of A correspond to Q's "soft lookup"
             A += self.mask[None, :, :]
@@ -48,13 +49,13 @@ class MultiAttention(nn.Module):
 
 
 class Transformer(nn.Module):
-    def __init__(self, heads, layers):
+    def __init__(self, heads, head_dim, layers):
         super().__init__()
         pos_init = torch.normal(mean=0, std=1/np.sqrt(DIM), size=(CONTEXT, DIM))
         self.pos_embed = nn.Parameter(pos_init)
         self.tok_embed = nn.Embedding(NTOK, DIM)
         self.tok_unembed = nn.Linear(DIM, NTOK, bias=False)
-        self.layers = [MultiAttention(heads) for _ in range(layers)]
+        self.layers = [MultiAttention(heads, head_dim) for _ in range(layers)]
 
     def forward(self, toks):
         batch, c = toks.shape
@@ -107,7 +108,7 @@ def main():
     X_train = data_int
     Y_train = data_int[:, 1:]
 
-    trans = Transformer(heads=1, layers=1)
+    trans = Transformer(heads=1, head_dim=DIM, layers=1)
 
     epochs = 5000
     opt = torch.optim.AdamW(trans.parameters(), lr=1e-2)
