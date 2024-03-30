@@ -100,7 +100,7 @@ def generate(trans, toks, n):
     out = []
     with torch.no_grad():
         for i in range(n):
-            logits = trans(x)[:, j]
+            logits = trans(x)[:, j - 1]
             assert logits.shape == (batch, NTOK)
             assert not any(torch.isnan(logits.flatten()))
             dist = F.softmax(logits)
