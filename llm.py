@@ -33,6 +33,22 @@ class Attention(nn.Module):
         return Y
 
 
+class MultiAttention(nn.Module):
+    def __init__(self, heads):
+        super().__init__()
+        self.heads = [Attention() for _ in range(heads)]
+        self.projector = nn.Linear(heads * DIM, DIM)
+        self.lin = nn.Linear(DIM, DIM)
+
+    def forward(self, X):
+        Ys = [h(X) for h in self.heads]
+        Ycat = torch.cat(Ys, axis=-1)
+        Y = self.projector(Ycat)
+        Y = F.relu(Y)
+        Y = self.lin(Y)
+        return Y
+
+
 def pos_encoding(context, dim):
     t = (2 * np.pi / context) * np.tile(np.arange(context), (context, 1)).squeeze()
     assert t.shape == (context, context)
@@ -49,13 +65,12 @@ def pos_encoding(context, dim):
 
 
 class Transformer(nn.Module):
-    def __init__(self, layers):
+    def __init__(self, heads, layers):
         super().__init__()
-        # TODO: multi-head
         self.pos_embed = torch.tensor(pos_encoding(CONTEXT, DIM))
         self.tok_embed = nn.Embedding(NTOK, DIM)
-        self.layers = [Attention() for _ in range(layers)]
         self.tok_unembed = nn.Linear(DIM, NTOK)
+        self.layers = [MultiAttention(heads) for _ in range(layers)]
 
     def forward(self, toks):
         assert toks.shape == (CONTEXT,)
@@ -101,7 +116,7 @@ def main():
     data_int = [np.array([TOKIND[t] for t in toks]) for toks in data_str]
     X_int = torch.LongTensor(np.stack(data_int))
     assert torch.all(X_int[:, 3] == NTOK - 1)
-    trans = Transformer(layers=1)
+    trans = Transformer(heads=3, layers=2)
 
     epochs = 1000
     opt = torch.optim.Adam(trans.parameters(), lr=1e-3)
