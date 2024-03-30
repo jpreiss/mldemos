@@ -25,23 +25,27 @@ class MultiAttention(nn.Module):
         self.lin2 = nn.Linear(DIM, DIM)
 
     def forward(self, X):
+        batch, c, d = X.shape
+        assert c == CONTEXT
+        assert d == DIM
         Qh = self.Q(X)
         Kh = self.K(X)
         Vh = self.V(X)
-        Ycat = torch.zeros(CONTEXT, DIM)
+        Ycat = torch.zeros(batch, CONTEXT, DIM)
         for i in range(self.heads):
             j0 = (DIM // self.heads) * i
             j1 = (DIM // self.heads) * (i + 1)
-            Q = Qh[:, j0:j1]
-            K = Kh[:, j0:j1]
-            V = Vh[:, j0:j1]
+            Q = Qh[:, :, j0:j1]
+            K = Kh[:, :, j0:j1]
+            V = Vh[:, :, j0:j1]
             # all are CONTEXT x DIM
-            A = Q @ K.T / np.sqrt(DIM) # attention
+            A = Q @ K.transpose(-1, -2) / np.sqrt(DIM) # attention
+            assert A.shape == (batch, CONTEXT, CONTEXT)
             # rows of A correspond to Q's "soft lookup"
-            A += self.mask
-            S = torch.softmax(A, dim=1)
+            A += self.mask[None, :, :]
+            S = torch.softmax(A, dim=-1)
             assert S.shape == A.shape
-            Ycat[:, j0:j1] = S @ V
+            Ycat[:, :, j0:j1] = S @ V
         Yproj = self.proj(Ycat)
         Y = self.lin1(Yproj)
         Y = F.relu(Y)
@@ -74,9 +78,10 @@ class Transformer(nn.Module):
         self.layers = [MultiAttention(heads) for _ in range(layers)]
 
     def forward(self, toks):
-        assert toks.shape == (CONTEXT,)
+        batch, c = toks.shape
+        assert c == CONTEXT
         X0 = self.tok_embed(toks)
-        assert X0.shape == (CONTEXT, DIM)
+        assert X0.shape == (batch, CONTEXT, DIM)
         X = X0 + self.pos_embed
         for layer in self.layers:
             X = layer(X) + X
@@ -87,23 +92,24 @@ class Transformer(nn.Module):
 
 
 def generate(trans, toks, n):
-    j = len(toks)
+    batch, j = toks.shape
     assert j + n <= CONTEXT
     # zero is END
-    x = torch.LongTensor(np.zeros(CONTEXT))
-    x[:j] = toks
+    x = torch.zeros(batch, CONTEXT, dtype=torch.long)
+    x[:, :j] = toks
     out = []
     with torch.no_grad():
         for i in range(n):
-            logits = trans(x)[j]
-            assert logits.shape == (NTOK,)
-            assert not any(torch.isnan(logits))
-            dist = F.softmax(logits).detach().numpy()
-            sample = np.random.choice(NTOK, p=dist)
+            logits = trans(x)[:, j]
+            assert logits.shape == (batch, NTOK)
+            assert not any(torch.isnan(logits.flatten()))
+            dist = F.softmax(logits)
+            sample = torch.multinomial(dist, 1).squeeze()
+            assert sample.shape == (batch,)
             out.append(sample)
-            x[j] = sample
+            x[:, j] = sample
             j += 1
-    return np.array(out)
+    return torch.stack(out).T
 
 
 def main():
@@ -115,44 +121,45 @@ def main():
             toks = [str(a), "+", str(b), "=", str(c)]
             data_str.append(toks)
     data_int = [np.array([TOKIND[t] for t in toks]) for toks in data_str]
-    X_int = torch.LongTensor(np.stack(data_int))
-    assert torch.all(X_int[:, 3] == NTOK - 1)
-    trans = Transformer(heads=4, layers=2)
+    data_int = torch.LongTensor(np.stack(data_int))
+    assert torch.all(data_int[:, 3] == NTOK - 1)
+
+    # TODO: remove final elt
+    X_train = data_int
+    Y_train = data_int[:, 1:]
+
+    trans = Transformer(heads=1, layers=1)
 
     epochs = 1000
-    opt = torch.optim.AdamW(trans.parameters(), lr=1e-3)
+    opt = torch.optim.AdamW(trans.parameters(), lr=1e-2)
     for epoch in range(epochs):
-        shuf = np.random.permutation(len(X_int))
-        X_int = X_int[shuf, :]
-        assert torch.all(X_int[:, 3] == NTOK - 1)
         if epoch % 10 == 0:
             print(f"After epoch {epoch}, I think...")
             with torch.no_grad():
-                for _ in range(10):
-                    idx = np.random.choice(len(data_int))
-                    x = X_int[idx] + 0  # copy for inplace edit later
-                    y_toks = generate(trans, x[:3], n=2)
-                    x[3:] = torch.tensor(y_toks)
-                    print("".join(TOKENS[t] for t in x))
-        for i in range(len(X_int)):
-            d = X_int[i, :]
-            #print("".join(data_str[i]))
-            opt.zero_grad()
-            #logits = trans(d)
-            #dists = F.softmax(logits, dim=1)[:-1]
-            #onehots = F.one_hot(d[1:], NTOK)
-            #print(f"{dists = }\n{onehots = }")
-            logits = trans(d)[:-1, :] # can't predict after end
-            target = d[1:]
-            assert d[3] == NTOK - 1  # equals sign
-            # DEBUG target = torch.LongTensor(np.repeat(NTOK - 1, CONTEXT - 1))
-            loss = F.cross_entropy(logits, target)
-            if False:
-                # DEBUG
-                idx = 2
-                loss = F.cross_entropy(logits[idx], target[idx])
-            loss.backward()
-            opt.step()
+                samples = 10
+                idx = np.random.choice(len(data_int), size=samples)
+                X = X_train[idx, :3]
+                Y = generate(trans, X, n=2)
+                print(Y.shape)
+                assert Y.shape == (samples, 2)
+                XY = torch.cat([X, Y], dim=1)
+                for xy in XY:
+                    print("".join(TOKENS[t] for t in xy))
+        opt.zero_grad()
+        #logits = trans(d)
+        #dists = F.softmax(logits, dim=1)[:-1]
+        #onehots = F.one_hot(d[1:], NTOK)
+        #print(f"{dists = }\n{onehots = }")
+        logits = trans(X_train)[:, :-1]
+        target = Y_train.flatten()
+        # DEBUG target = torch.LongTensor(np.repeat(NTOK - 1, CONTEXT - 1))
+        loss = F.cross_entropy(logits.reshape(-1, NTOK), target)
+        if True:
+            # DEBUG
+            idx = 2
+            loss = F.cross_entropy(logits[:, idx], Y_train[:, idx])
+        loss.backward()
+        opt.step()
 
 
 if __name__ == "__main__":
