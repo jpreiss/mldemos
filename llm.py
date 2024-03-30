@@ -105,8 +105,8 @@ def generate(trans, toks, n):
             logits = trans(x)[:, j - 1]
             assert logits.shape == (batch, NTOK)
             assert not any(torch.isnan(logits.flatten()))
-            dist = F.softmax(logits)
-            sample = torch.multinomial(dist, 1).squeeze()
+            dist = F.softmax(logits, dim=-1)
+            sample = torch.multinomial(dist, num_samples=1).squeeze()
             assert sample.shape == (batch,)
             out.append(sample)
             x[:, j] = sample
