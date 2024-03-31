@@ -83,6 +83,7 @@ class Transformer(nn.Module):
         return logits
 
     def generate(self, toks, n):
+        """Samples from the language model autoregressively."""
         batch, j = toks.shape
         assert j + n <= CONTEXT + 1
         # zero is END
@@ -106,6 +107,7 @@ class Transformer(nn.Module):
 
 
 def print_toks(toks):
+    """Converts ints->strings, prints, and stops on END."""
     strs = []
     for t in toks[1:]:
         if t == 0:
@@ -115,10 +117,11 @@ def print_toks(toks):
 
 
 def check_completion(data_int, trans):
+    """Checks performance on completion of the training set starting with ="""
     N = data_int.shape[0]
     samples = 10
-    X = data_int[:, :4]
-    Y = trans.generate(X, n=3)
+    X = data_int[:, :4] # END, a, op, b -- no equals sign
+    Y = trans.generate(X, n=3) # should be =, c1, c2
     XY = torch.cat([X, Y], dim=1)
     errors = torch.sum(torch.any(XY != data_int, dim=-1))
     print(f"errors = {errors}/{N}")
@@ -128,8 +131,9 @@ def check_completion(data_int, trans):
 
 
 def check_coverage(data_int, trans):
-    # x10 because gotta expect some duplicates
-    X = torch.zeros(len(data_int) * 10, 1, dtype=torch.long)
+    """Checks performance on generating the training set from nothing."""
+    # Expect some duplicates, so generate multiple x of dataset.
+    X = torch.zeros(len(data_int) * 5, 1, dtype=torch.long)
     Y = trans.generate(X, n=6)
     assert Y.shape[-1] == 6
     XY = torch.cat([X, Y], dim=1)
@@ -152,7 +156,7 @@ def check_coverage(data_int, trans):
 
 
 def main():
-    # generate some training data
+    # Generate training data of equations.
     data_str = []
     for a in range(10):
         for b in range(10):
@@ -163,26 +167,22 @@ def main():
                 else:
                     toks += [str(c), "END"]
                 data_str.append(toks)
+
+    # Convert to tensors.
     data_int = [[TOKIND[t] for t in toks] for toks in data_str]
     data_int = torch.LongTensor(data_int)
     assert torch.all(data_int[:, 4] == NTOK - 1)
-
     X_train = data_int[:, :-1]
     Y_train = data_int[:, 1:]
 
+    # Construct and train model.
     trans = Transformer(heads=4, head_dim=8, layers=2)
-
     epochs = 10001
     opt = torch.optim.AdamW(trans.parameters(), lr=3e-3)
     for epoch in range(epochs):
         opt.zero_grad()
         logits = trans(X_train)
-        if False:
-            # DEBUG
-            idx = 2
-            loss = F.cross_entropy(logits[:, idx], Y_train[:, idx])
-        else:
-            loss = F.cross_entropy(logits.reshape(-1, NTOK), Y_train.flatten())
+        loss = F.cross_entropy(logits.reshape(-1, NTOK), Y_train.flatten())
         loss.backward()
         opt.step()
         if epoch % 100 == 0:
