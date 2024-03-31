@@ -7,7 +7,7 @@ TOKENS = ["END"] + [str(i) for i in range(10)] + ["+", "*", "="]
 TOKIND = {t: i for i, t in enumerate(TOKENS)}
 NTOK = len(TOKENS)
 DIM = 32
-CONTEXT = 5
+CONTEXT = 6
 
 
 class MultiAttention(nn.Module):
@@ -104,22 +104,21 @@ def generate(trans, toks, n):
 def check_completion(data_int, trans):
     N = data_int.shape[0]
     samples = 10
-    X = data_int[:, :3]
+    X = data_int[:, :4]
     Y = generate(trans, X, n=3)
-    assert Y.shape[-1] == 3
     XY = torch.cat([X, Y], dim=1)
     errors = torch.sum(torch.any(XY != data_int, dim=-1))
     print(f"errors = {errors}/{N}")
     idx = np.random.choice(N, size=samples)
     for xy in XY[idx]:
-        print("".join(TOKENS[t] for t in xy))
+        print("".join(TOKENS[t] for t in xy[1:]))
 
 
 def check_coverage(data_int, trans):
-    X = data_int[:, :1]
-    X = torch.cat([X] * 10, dim=0)  # gotta expect some duplicates
-    Y = generate(trans, X, n=5)
-    assert Y.shape[-1] == 5
+    # x10 because gotta expect some duplicates
+    X = torch.zeros(len(data_int) * 10, 1, dtype=torch.long)
+    Y = generate(trans, X, n=6)
+    assert Y.shape[-1] == 6
     XY = torch.cat([X, Y], dim=1)
     sD = set(tuple(d.numpy()) for d in data_int)
     sXY = set(tuple(xy.numpy()) for xy in XY)
@@ -131,12 +130,12 @@ def check_coverage(data_int, trans):
     if len(false_eqns) < 10:
         print("false equations:")
         for f in false_eqns:
-            print("".join(TOKENS[t] for t in f))
+            print("".join(TOKENS[t] for t in f[1:]))
     print("samples:")
     samples = 10
     idx = np.random.choice(data_int.shape[0], size=samples)
     for xy in XY[idx]:
-        print("".join(TOKENS[t] for t in xy))
+        print("".join(TOKENS[t] for t in xy[1:]))
 
 
 def main():
@@ -145,11 +144,11 @@ def main():
     for a in range(10):
         for b in range(10):
             for c, op in zip([a + b, a * b], ["+", "*"]):
-                toks = [str(a), op, str(b), "=", str(c // 10), str(c % 10)]
+                toks = ["END", str(a), op, str(b), "=", str(c // 10), str(c % 10)]
                 data_str.append(toks)
     data_int = [np.array([TOKIND[t] for t in toks]) for toks in data_str]
     data_int = torch.LongTensor(np.stack(data_int))
-    assert torch.all(data_int[:, 3] == NTOK - 1)
+    assert torch.all(data_int[:, 4] == NTOK - 1)
 
     X_train = data_int[:, :-1]
     Y_train = data_int[:, 1:]
