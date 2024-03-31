@@ -10,7 +10,7 @@ CONTEXT = 6
 
 
 class MultiAttention(nn.Module):
-    def __init__(self, heads, head_dim, mlp=False):
+    def __init__(self, heads, head_dim, mlp=True):
         super().__init__()
         self.heads = heads
         rows = heads * head_dim
@@ -20,6 +20,7 @@ class MultiAttention(nn.Module):
         self.mask = torch.triu(torch.zeros((CONTEXT, CONTEXT)) - float('inf'), 1)
         if mlp:
             self.proj = nn.Sequential(
+                nn.LayerNorm(rows),
                 nn.Linear(rows, rows * 4, bias=False),
                 nn.ReLU(),
                 nn.Linear(rows * 4, DIM, bias=False),
@@ -56,6 +57,7 @@ class Transformer(nn.Module):
         self.tok_embed = nn.Embedding(NTOK, DIM)
         self.tok_unembed = nn.Linear(DIM, NTOK, bias=False)
         self.layers = [MultiAttention(heads, head_dim) for _ in range(layers)]
+        self.norms = [None] + [nn.LayerNorm(DIM) for _ in range(layers - 1)]
 
     def forward(self, toks):
         batch, c = toks.shape
@@ -63,7 +65,9 @@ class Transformer(nn.Module):
         X0 = self.tok_embed(toks)
         assert X0.shape == (batch, CONTEXT, DIM)
         X = X0 + self.pos_embed
-        for layer in self.layers:
+        for layer, norm in zip(self.layers, self.norms):
+            if norm is not None:
+                X = norm(X)
             X = layer(X)
         # now is context x dim
         logits = self.tok_unembed(X)
@@ -159,10 +163,10 @@ def main():
     X_train = data_int[:, :-1]
     Y_train = data_int[:, 1:]
 
-    trans = Transformer(heads=4, head_dim=8, layers=1)
+    trans = Transformer(heads=4, head_dim=8, layers=2)
 
-    epochs = 5001
-    opt = torch.optim.AdamW(trans.parameters(), lr=1e-2)
+    epochs = 10001
+    opt = torch.optim.AdamW(trans.parameters(), lr=3e-3)
     for epoch in range(epochs):
         opt.zero_grad()
         logits = trans(X_train)
