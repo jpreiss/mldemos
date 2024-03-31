@@ -1,19 +1,27 @@
+"""Applies a decoder-only (GPT-like) Transformer to model math equations."""
+
 import torch
 from torch import nn
 from torch.nn import functional as F
 
+# Tokens are just for integer math equations.
 TOKENS = ["END"] + [str(i) for i in range(10)] + ["+", "*", "="]
 TOKIND = {t: i for i, t in enumerate(TOKENS)}
 NTOK = len(TOKENS)
+
+# Hyperparameters.
 DIM = 32
 CONTEXT = 6
 
 
 class MultiAttention(nn.Module):
+    """One layer of masked multi-head attention with MLP post-computation."""
+
     def __init__(self, heads, head_dim, mlp=True):
         super().__init__()
         self.heads = heads
         rows = heads * head_dim
+        # All the heads are stored together for efficiency.
         self.Q = nn.Linear(DIM, rows, bias=False)
         self.K = nn.Linear(DIM, rows, bias=False)
         self.V = nn.Linear(DIM, rows, bias=False)
