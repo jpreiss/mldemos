@@ -32,25 +32,19 @@ class MultiAttention(nn.Module):
         batch, c, d = X.shape
         assert c == CONTEXT
         assert d == DIM
-        Qh = self.Q(X)
-        Kh = self.K(X)
-        Vh = self.V(X)
-        Ycat = torch.zeros_like(Vh)
-        head_dim = Ycat.shape[-1] // self.heads
-        for i in range(self.heads):
-            j0 = head_dim * i
-            j1 = head_dim * (i + 1)
-            Q = Qh[:, :, j0:j1]
-            K = Kh[:, :, j0:j1]
-            V = Vh[:, :, j0:j1]
-            # all are batch * CONTEXT x head_dim
-            A = Q @ K.transpose(-1, -2) / np.sqrt(head_dim) # attention
-            assert A.shape == (batch, CONTEXT, CONTEXT)
-            # rows of A correspond to Q's "soft lookup"
-            A += self.mask[None, :, :]
-            S = torch.softmax(A, dim=-1)
-            assert S.shape == A.shape
-            Ycat[:, :, j0:j1] = S @ V
+        Q = self.Q(X).reshape(batch, c, self.heads, -1)
+        K = self.K(X).reshape(batch, c, self.heads, -1)
+        V = self.V(X).reshape(batch, c, self.heads, -1)
+        head_dim = Q.shape[-1]
+        Qt = Q.transpose(-2, -3)
+        Kt = K.transpose(-3, -2).transpose(-2, -1)
+        A = Qt @ Kt / np.sqrt(head_dim)
+        assert A.shape == (batch, self.heads, CONTEXT, CONTEXT)
+        A += self.mask[None, None, :, :]
+        S = torch.softmax(A, dim=-1)
+        assert S.shape == A.shape
+        Ycat = S @ V.transpose(-3, -2)
+        Ycat = Ycat.transpose(-3, -2).reshape(batch, CONTEXT, self.heads * head_dim)
         Y = self.proj(Ycat) + X
         return Y
 
