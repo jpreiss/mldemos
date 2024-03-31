@@ -101,6 +101,15 @@ def generate(trans, toks, n):
     return torch.stack(out).T
 
 
+def print_toks(toks):
+    strs = []
+    for t in toks[1:]:
+        if t == 0:
+            break
+        strs += TOKENS[t]
+    print("".join(strs))
+
+
 def check_completion(data_int, trans):
     N = data_int.shape[0]
     samples = 10
@@ -111,7 +120,7 @@ def check_completion(data_int, trans):
     print(f"errors = {errors}/{N}")
     idx = np.random.choice(N, size=samples)
     for xy in XY[idx]:
-        print("".join(TOKENS[t] for t in xy[1:]))
+        print_toks(xy)
 
 
 def check_coverage(data_int, trans):
@@ -127,15 +136,15 @@ def check_coverage(data_int, trans):
     n_false = len(false_eqns)
     print(f"generated {n_true}/{len(sD)} true equations")
     print(f"generated {n_false} false equations")
-    if len(false_eqns) < 10:
+    if len(false_eqns) < 20:
         print("false equations:")
         for f in false_eqns:
-            print("".join(TOKENS[t] for t in f[1:]))
-    print("samples:")
+            print_toks(f)
+    print("gen samples:")
     samples = 10
     idx = np.random.choice(data_int.shape[0], size=samples)
     for xy in XY[idx]:
-        print("".join(TOKENS[t] for t in xy[1:]))
+        print_toks(xy)
 
 
 def main():
@@ -144,7 +153,11 @@ def main():
     for a in range(10):
         for b in range(10):
             for c, op in zip([a + b, a * b], ["+", "*"]):
-                toks = ["END", str(a), op, str(b), "=", str(c // 10), str(c % 10)]
+                toks = ["END", str(a), op, str(b), "="]
+                if c > 9:
+                    toks += [str(c // 10), str(c % 10)]
+                else:
+                    toks += [str(c), "END"]
                 data_str.append(toks)
     data_int = [np.array([TOKIND[t] for t in toks]) for toks in data_str]
     data_int = torch.LongTensor(np.stack(data_int))
