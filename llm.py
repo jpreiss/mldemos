@@ -1,4 +1,3 @@
-import numpy as np
 import torch
 from torch import nn
 from torch.nn import functional as F
@@ -18,7 +17,7 @@ class MultiAttention(nn.Module):
         self.Q = nn.Linear(DIM, rows, bias=False)
         self.K = nn.Linear(DIM, rows, bias=False)
         self.V = nn.Linear(DIM, rows, bias=False)
-        self.mask = torch.triu(torch.zeros((CONTEXT, CONTEXT)) - np.inf, 1)
+        self.mask = torch.triu(torch.zeros((CONTEXT, CONTEXT)) - float('inf'), 1)
         if mlp:
             self.proj = nn.Sequential(
                 nn.Linear(rows, rows * 4, bias=False),
@@ -38,7 +37,7 @@ class MultiAttention(nn.Module):
         K = remap(self.K(X))
         V = remap(self.V(X))
         head_dim = Q.shape[-1]
-        A = Q @ K.transpose(-2, -1) / np.sqrt(head_dim)
+        A = Q @ K.transpose(-2, -1) * head_dim**-0.5
         assert A.shape == (batch, self.heads, CONTEXT, CONTEXT)
         A += self.mask[None, None, :, :]
         S = torch.softmax(A, dim=-1)
@@ -52,7 +51,7 @@ class MultiAttention(nn.Module):
 class Transformer(nn.Module):
     def __init__(self, heads, head_dim, layers):
         super().__init__()
-        pos_init = torch.normal(mean=0, std=1/np.sqrt(DIM), size=(CONTEXT, DIM))
+        pos_init = torch.normal(mean=0, std=DIM**-0.5, size=(CONTEXT, DIM))
         self.pos_embed = nn.Parameter(pos_init)
         self.tok_embed = nn.Embedding(NTOK, DIM)
         self.tok_unembed = nn.Linear(DIM, NTOK, bias=False)
@@ -112,7 +111,7 @@ def check_completion(data_int, trans):
     XY = torch.cat([X, Y], dim=1)
     errors = torch.sum(torch.any(XY != data_int, dim=-1))
     print(f"errors = {errors}/{N}")
-    idx = np.random.choice(N, size=samples)
+    idx = torch.randint(N, size=(samples,))
     for xy in XY[idx]:
         print_toks(xy)
 
@@ -136,7 +135,7 @@ def check_coverage(data_int, trans):
             print_toks(f)
     print("gen samples:")
     samples = 10
-    idx = np.random.choice(data_int.shape[0], size=samples)
+    idx = torch.randint(data_int.shape[0], size=(samples,))
     for xy in XY[idx]:
         print_toks(xy)
 
@@ -153,8 +152,8 @@ def main():
                 else:
                     toks += [str(c), "END"]
                 data_str.append(toks)
-    data_int = [np.array([TOKIND[t] for t in toks]) for toks in data_str]
-    data_int = torch.LongTensor(np.stack(data_int))
+    data_int = [[TOKIND[t] for t in toks] for toks in data_str]
+    data_int = torch.LongTensor(data_int)
     assert torch.all(data_int[:, 4] == NTOK - 1)
 
     X_train = data_int[:, :-1]
