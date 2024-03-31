@@ -11,7 +11,7 @@ CONTEXT = 5
 
 
 class MultiAttention(nn.Module):
-    def __init__(self, heads, head_dim):
+    def __init__(self, heads, head_dim, mlp=False):
         super().__init__()
         self.heads = heads
         rows = heads * head_dim
@@ -19,7 +19,14 @@ class MultiAttention(nn.Module):
         self.K = nn.Linear(DIM, rows, bias=False)
         self.V = nn.Linear(DIM, rows, bias=False)
         self.mask = torch.triu(torch.zeros((CONTEXT, CONTEXT)) - np.inf, 1)
-        self.proj = nn.Linear(rows, DIM, bias=False)
+        if mlp:
+            self.proj = nn.Sequential(
+                nn.Linear(rows, rows * 4, bias=False),
+                nn.ReLU(),
+                nn.Linear(rows * 4, DIM, bias=False),
+            )
+        else:
+            self.proj = nn.Linear(rows, DIM, bias=False)
 
     def forward(self, X):
         batch, c, d = X.shape
