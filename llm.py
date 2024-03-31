@@ -82,28 +82,27 @@ class Transformer(nn.Module):
         # now is context x NTOK, aka logits for dists over tokens
         return logits
 
-
-def generate(trans, toks, n):
-    batch, j = toks.shape
-    assert j + n <= CONTEXT + 1
-    # zero is END
-    x = torch.zeros(batch, CONTEXT, dtype=torch.long)
-    out = []
-    with torch.no_grad():
-        for i in range(n):
-            x[:, :j] = toks
-            logits = trans(x)[:, j - 1]
-            assert logits.shape == (batch, NTOK)
-            assert not any(torch.isnan(logits.flatten()))
-            dist = F.softmax(logits, dim=-1)
-            sample = torch.multinomial(dist, num_samples=1).squeeze()
-            assert sample.shape == (batch,)
-            out.append(sample)
-            toks = torch.cat([toks, sample[:, None]], axis=-1)
-            if i != n - 1:
-                x[:, j] = sample
-                j += 1
-    return torch.stack(out).T
+    def generate(self, toks, n):
+        batch, j = toks.shape
+        assert j + n <= CONTEXT + 1
+        # zero is END
+        x = torch.zeros(batch, CONTEXT, dtype=torch.long)
+        out = []
+        with torch.no_grad():
+            for i in range(n):
+                x[:, :j] = toks
+                logits = self(x)[:, j - 1]
+                assert logits.shape == (batch, NTOK)
+                assert not any(torch.isnan(logits.flatten()))
+                dist = F.softmax(logits, dim=-1)
+                sample = torch.multinomial(dist, num_samples=1).squeeze()
+                assert sample.shape == (batch,)
+                out.append(sample)
+                toks = torch.cat([toks, sample[:, None]], axis=-1)
+                if i != n - 1:
+                    x[:, j] = sample
+                    j += 1
+        return torch.stack(out).T
 
 
 def print_toks(toks):
@@ -119,7 +118,7 @@ def check_completion(data_int, trans):
     N = data_int.shape[0]
     samples = 10
     X = data_int[:, :4]
-    Y = generate(trans, X, n=3)
+    Y = trans.generate(X, n=3)
     XY = torch.cat([X, Y], dim=1)
     errors = torch.sum(torch.any(XY != data_int, dim=-1))
     print(f"errors = {errors}/{N}")
@@ -131,7 +130,7 @@ def check_completion(data_int, trans):
 def check_coverage(data_int, trans):
     # x10 because gotta expect some duplicates
     X = torch.zeros(len(data_int) * 10, 1, dtype=torch.long)
-    Y = generate(trans, X, n=6)
+    Y = trans.generate(X, n=6)
     assert Y.shape[-1] == 6
     XY = torch.cat([X, Y], dim=1)
     sD = set(tuple(d.numpy()) for d in data_int)
