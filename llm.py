@@ -32,18 +32,18 @@ class MultiAttention(nn.Module):
         batch, c, d = X.shape
         assert c == CONTEXT
         assert d == DIM
-        Q = self.Q(X).reshape(batch, c, self.heads, -1)
-        K = self.K(X).reshape(batch, c, self.heads, -1)
-        V = self.V(X).reshape(batch, c, self.heads, -1)
+        def remap(A):
+            return A.reshape(batch, c, self.heads, -1).transpose(-2, -3)
+        Q = remap(self.Q(X))
+        K = remap(self.K(X))
+        V = remap(self.V(X))
         head_dim = Q.shape[-1]
-        Qt = Q.transpose(-2, -3)
-        Kt = K.transpose(-3, -2).transpose(-2, -1)
-        A = Qt @ Kt / np.sqrt(head_dim)
+        A = Q @ K.transpose(-2, -1) / np.sqrt(head_dim)
         assert A.shape == (batch, self.heads, CONTEXT, CONTEXT)
         A += self.mask[None, None, :, :]
         S = torch.softmax(A, dim=-1)
         assert S.shape == A.shape
-        Ycat = S @ V.transpose(-3, -2)
+        Ycat = S @ V
         Ycat = Ycat.transpose(-3, -2).reshape(batch, CONTEXT, self.heads * head_dim)
         Y = self.proj(Ycat) + X
         return Y
