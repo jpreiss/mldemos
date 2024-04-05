@@ -4,6 +4,9 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
+from util import fastmode
+
+
 # Tokens are just for integer math equations.
 TOKENS = ["END"] + [str(i) for i in range(10)] + ["+", "*", "="]
 TOKIND = {t: i for i, t in enumerate(TOKENS)}
@@ -177,7 +180,7 @@ def main():
 
     # Construct and train model.
     trans = Transformer(heads=4, head_dim=8, layers=2)
-    epochs = 10001
+    epochs = 1001 if fastmode() else 10001
     opt = torch.optim.AdamW(trans.parameters(), lr=3e-3)
     for epoch in range(epochs):
         opt.zero_grad()
