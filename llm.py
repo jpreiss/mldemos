@@ -137,8 +137,8 @@ def check_coverage(data_int, trans):
     Y = trans.generate(X, n=6)
     assert Y.shape[-1] == 6
     XY = torch.cat([X, Y], dim=1)
-    sD = set(tuple(d.numpy()) for d in data_int)
-    sXY = set(tuple(xy.numpy()) for xy in XY)
+    sD = set(tuple(d.tolist()) for d in data_int)
+    sXY = set(tuple(xy.tolist()) for xy in XY)
     n_true = len(sD & sXY)
     false_eqns = sXY - sD
     n_false = len(false_eqns)
