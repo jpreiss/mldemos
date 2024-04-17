@@ -146,15 +146,23 @@ def check_coverage(data_int, trans):
     XY = torch.cat([X, Y], dim=1)
     sD = set(tuple(d.tolist()) for d in data_int)
     sXY = set(tuple(xy.tolist()) for xy in XY)
+
+    missed_true = sD - sXY
     n_true = len(sD & sXY)
+    print(f"generated {n_true}/{len(sD)} true equations")
+    if 0 < len(missed_true) < 20:
+        print("missed true equations:")
+        for mt in missed_true:
+            print_toks(mt)
+
     false_eqns = sXY - sD
     n_false = len(false_eqns)
-    print(f"generated {n_true}/{len(sD)} true equations")
     print(f"generated {n_false} false equations")
-    if len(false_eqns) < 20:
+    if 0 < n_false < 20:
         print("false equations:")
         for f in false_eqns:
             print_toks(f)
+
     print("gen samples:")
     samples = 10
     idx = torch.randint(data_int.shape[0], size=(samples,))
