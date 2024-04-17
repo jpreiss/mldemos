@@ -191,7 +191,7 @@ def main():
     Y_train = data_int[:, 1:]
 
     # Construct model and print some info.
-    trans = Transformer(heads=4, head_dim=8, layers=2)
+    trans = Transformer(heads=4, head_dim=8, layers=1)
     params = sum(p.numel() for p in trans.parameters())
     datapoints = X_train.shape[0]
     print(
@@ -200,8 +200,8 @@ def main():
     )
 
     # Train model.
-    epochs = 1001 if fastmode() else 10001
-    opt = torch.optim.AdamW(trans.parameters(), lr=3e-3)
+    epochs = 1001 if fastmode() else 4001
+    opt = torch.optim.AdamW(trans.parameters(), lr=1e-3)
     for epoch in range(epochs):
         opt.zero_grad()
         logits = trans(X_train)
