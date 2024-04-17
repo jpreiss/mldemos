@@ -67,8 +67,12 @@ class Transformer(nn.Module):
         self.pos_embed = nn.Parameter(pos_init)
         self.tok_embed = nn.Embedding(NTOK, DIM)
         self.tok_unembed = nn.Linear(DIM, NTOK, bias=False)
-        self.layers = [MultiAttention(heads, head_dim) for _ in range(layers)]
-        self.norms = [None] + [nn.LayerNorm(DIM) for _ in range(layers - 1)]
+        self.layers = nn.ModuleList(
+            [MultiAttention(heads, head_dim) for _ in range(layers)]
+        )
+        self.norms = nn.ModuleList(
+            [None] + [nn.LayerNorm(DIM) for _ in range(layers - 1)]
+        )
 
     def forward(self, toks):
         batch, c = toks.shape
@@ -178,8 +182,16 @@ def main():
     X_train = data_int[:, :-1]
     Y_train = data_int[:, 1:]
 
-    # Construct and train model.
+    # Construct model and print some info.
     trans = Transformer(heads=4, head_dim=8, layers=2)
+    params = sum(p.numel() for p in trans.parameters())
+    datapoints = X_train.shape[0]
+    print(
+        f"{params = }, {datapoints = }"
+        f" (overparameterized by {params / datapoints:.2f}x)"
+    )
+
+    # Train model.
     epochs = 1001 if fastmode() else 10001
     opt = torch.optim.AdamW(trans.parameters(), lr=3e-3)
     for epoch in range(epochs):
